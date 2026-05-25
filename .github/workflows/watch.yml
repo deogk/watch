@@ -2,9 +2,9 @@ name: Page Watch
 
 on:
   schedule:
-    # 5분마다 실행 (스케줄 최소 주기는 5분이며, 부하에 따라 지연될 수 있음)
-    - cron: "*/5 * * * *"
-  workflow_dispatch:        # 수동 실행 버튼도 추가
+    - cron: "*/5 * * * *"     # 5분마다: 평소 감시 (열림/문제 시에만 알림)
+    - cron: "0 * * * *"       # 매시 정각: 생존 신호 (현재 상태 보고)
+  workflow_dispatch:          # 수동 실행 버튼
 
 jobs:
   check:
@@ -24,4 +24,6 @@ jobs:
       - name: Run checker
         env:
           WEBHOOK_URL: ${{ secrets.WEBHOOK_URL }}
+          # 매시 정각 실행이면 heartbeat(생존 신호), 그 외에는 watch(평소 감시)
+          MODE: ${{ github.event.schedule == '0 * * * *' && 'heartbeat' || 'watch' }}
         run: python check.py
