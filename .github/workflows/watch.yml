@@ -1,0 +1,27 @@
+name: Page Watch
+
+on:
+  schedule:
+    # 5분마다 실행 (스케줄 최소 주기는 5분이며, 부하에 따라 지연될 수 있음)
+    - cron: "*/5 * * * *"
+  workflow_dispatch:        # 수동 실행 버튼도 추가
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install requests beautifulsoup4
+
+      - name: Run checker
+        env:
+          WEBHOOK_URL: ${{ secrets.WEBHOOK_URL }}
+        run: python check.py
