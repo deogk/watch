@@ -27,3 +27,5 @@ jobs:
           # 매시 정각 실행이면 heartbeat(생존 신호), 그 외에는 watch(평소 감시)
           MODE: ${{ github.event.schedule == '0 * * * *' && 'heartbeat' || 'watch' }}
         run: python check.py
+
+# trigger schedule
