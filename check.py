@@ -5,11 +5,15 @@
 스케줄러(GitHub Actions 등)에서 주기적으로 호출되는 것을 전제로,
 '한 번 확인하고 종료'하는 구조입니다.
 
-상태를 세 가지로 구분합니다:
-  - OPEN     : 항목이 열림(선택 가능)  -> 디스코드 알림
-  - CLOSED   : 여전히 비활성(선택 불가) -> 로그만 남김
-  - UNKNOWN  : 페이지 구조가 예상과 달라 판단 불가 -> 디스코드 경고
-               (스크립트가 조용히 고장나서 알림을 놓치는 상황을 방지)
+두 가지 모드로 동작합니다 (환경변수 MODE 로 선택, 기본은 watch):
+  - MODE=watch     평소 감시. 항목이 열리거나(OPEN) 판단 불가(UNKNOWN)일 때만 알림.
+  - MODE=heartbeat 생존 신호. 현재 상태를 한 줄로 디스코드에 보고 (잘 돌고 있는지 확인용).
+                   단, 이때 OPEN 이면 생존 신호 대신 '열림' 알림을 보낸다.
+
+상태는 세 가지로 구분합니다:
+  - OPEN     : 항목이 열림(선택 가능)
+  - CLOSED   : 여전히 비활성(선택 불가)
+  - UNKNOWN  : 페이지 구조가 예상과 달라 판단 불가 (조용한 고장 방지용)
 
 판정 방식:
   대상 항목의 체크박스는 비활성일 때
@@ -36,6 +40,7 @@ TARGET_URL = os.environ.get("TARGET_URL", "https://icml.cc/Register/view-registr
 CHECKBOX_NAME = os.environ.get("TARGET_NAME", "Conference Sessions")
 CLOSED_MARKER = os.environ.get("CLOSED_MARKER", "sold out").lower()
 WEBHOOK = os.environ.get("WEBHOOK_URL", "").strip()
+MODE = os.environ.get("MODE", "watch").strip().lower()   # watch | heartbeat
 
 HEADERS = {
     "User-Agent": (
@@ -97,22 +102,33 @@ def main():
     resp.raise_for_status()
 
     status = detect_status(resp.text)
+    print(f"[MODE={MODE}] 대상 항목 상태: {status}")
 
+    # 어느 모드든 '열림'은 가장 중요하므로 항상 알린다.
     if status == OPEN:
         print("대상 항목: 열림(OPEN) 감지!")
         send_discord(
             "@here 🎉 **확인 중이던 항목이 열렸을 수 있습니다!**\n"
             f"지금 바로 확인하세요 👉 {TARGET_URL}"
         )
-    elif status == CLOSED:
-        print("대상 항목: 여전히 비활성(CLOSED)")
-    else:  # UNKNOWN
+        return
+
+    if status == UNKNOWN:
+        # 구조 변화 등으로 판단 불가 -> 어느 모드든 경고하고 실패 처리
         print("대상 항목: 판단 불가(UNKNOWN) - 페이지 구조가 바뀌었을 수 있음", file=sys.stderr)
         send_discord(
             "⚠️ **감시 스크립트 주의**: 항목 상태를 판단하지 못했습니다.\n"
             f"페이지 구조가 바뀌었을 수 있으니 직접 확인하고, 필요하면 스크립트를 점검하세요 👉 {TARGET_URL}"
         )
         sys.exit(1)
+
+    # 여기는 status == CLOSED 인 경우
+    if MODE == "heartbeat":
+        # 생존 신호: 잘 돌고 있고 아직 비활성이라는 걸 한 줄로 보고
+        send_discord("🟢 감시 정상 작동 중 — 대상 항목은 아직 비활성(CLOSED) 상태입니다.")
+    else:
+        # 평소 감시 모드에서는 조용히 로그만
+        print("대상 항목: 여전히 비활성(CLOSED) — 알림 없음(정상)")
 
 
 if __name__ == "__main__":
